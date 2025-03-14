@@ -20,46 +20,62 @@ router.post('/verify-otp', async (req, res) => {
       return res.status(400).json({ message: 'Email already verified' });
     }
 
-    if (!user.otp || !user.otpExpiry) {
-      return res.status(400).json({ message: 'No OTP found. Please request a new one' });
-    }
-
-    if (Date.now() > user.otpExpiry) {
-      return res.status(400).json({ message: 'OTP has expired. Please request a new one' });
-    }
-
-    // Check OTP attempts
+    // Check if user has exceeded maximum attempts
     if (user.otpAttempts >= MAX_OTP_ATTEMPTS) {
       const cooldownRemaining = OTP_COOLDOWN_PERIOD - (Date.now() - user.lastOtpRequest);
       if (cooldownRemaining > 0) {
         return res.status(429).json({
-          message: 'Too many attempts. Please try again later',
+          message: `Too many attempts. Please try again in ${Math.ceil(cooldownRemaining / 1000)} seconds`,
+          remainingAttempts: 0,
           cooldownRemaining: Math.ceil(cooldownRemaining / 1000)
         });
-      } else {
-        // Reset attempts after cooldown period
-        user.otpAttempts = 0;
       }
+      // Reset attempts after cooldown period
+      user.otpAttempts = 0;
+    }
+
+    if (!user.otp || !user.otpExpiry) {
+      return res.status(400).json({
+        message: 'No OTP found. Please request a new one',
+        remainingAttempts: MAX_OTP_ATTEMPTS
+      });
+    }
+
+    if (Date.now() > user.otpExpiry) {
+      return res.status(400).json({
+        message: 'OTP has expired. Please request a new one',
+        remainingAttempts: MAX_OTP_ATTEMPTS
+      });
     }
 
     if (user.otp !== otp) {
       user.otpAttempts += 1;
       await user.save();
+      
+      const remainingAttempts = MAX_OTP_ATTEMPTS - user.otpAttempts;
       return res.status(400).json({
-        message: 'Invalid OTP',
-        remainingAttempts: MAX_OTP_ATTEMPTS - user.otpAttempts
+        message: `Invalid OTP. ${remainingAttempts} attempts remaining`,
+        remainingAttempts: remainingAttempts
       });
     }
 
+    // Reset attempts on successful verification
     user.emailVerified = true;
     user.otp = undefined;
     user.otpExpiry = undefined;
+    user.otpAttempts = 0;
     await user.save();
 
-    res.json({ message: 'OTP verified successfully' });
+    res.json({ 
+      message: 'OTP verified successfully',
+      remainingAttempts: MAX_OTP_ATTEMPTS
+    });
   } catch (error) {
     console.error('Error verifying OTP:', error);
-    res.status(500).json({ message: 'Error verifying OTP' });
+    res.status(500).json({ 
+      message: 'Error verifying OTP',
+      remainingAttempts: MAX_OTP_ATTEMPTS
+    });
   }
 });
 
