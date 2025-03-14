@@ -23,16 +23,24 @@ router.get('/', authenticateToken, async (req, res) => {
   }
 });
 
-// Mark notification as read
+// Mark notification as read or unread
 router.patch('/:id/read', authenticateToken, async (req, res) => {
   try {
+    const { isRead = true } = req.body; // Default to marking as read if not specified
+    
     const notification = await Notification.findOneAndUpdate(
-      { _id: req.params.id, userId: req.user._id },
-      { isRead: true },
+      { _id: req.params.id, userId: req.user.id },
+      { isRead: isRead },
       { new: true }
     );
+    
+    if (!notification) {
+      return res.status(404).json({ message: 'Notification not found' });
+    }
+    
     res.json(notification);
   } catch (error) {
+    console.error('Error updating notification:', error);
     res.status(500).json({ message: error.message });
   }
 });
