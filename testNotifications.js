@@ -28,12 +28,12 @@ const createTestNotifications = async () => {
     }
 
     const notificationTypes = [
-      { type: 'Scam Alert', title: 'Fraud Alert!', message: 'Beware of phishing attempts.' },
+      { type: 'Scam', title: 'Fraud Alert!', message: 'Beware of phishing attempts.' },
       { type: 'Event Cancellation', title: 'Event Update', message: 'Your event has been canceled.' },
       { type: 'Weather Warning', title: 'Storm Incoming!', message: 'Severe weather conditions expected.' },
       { type: 'Your Rewards', title: 'Reward Alert', message: 'You have received a reward.' },
       { type: "You're Promoted", title: 'Promotion Alert', message: 'You have been promoted.' },
-      { type: 'Scam Alert', title: 'Fraud Alert!', message: 'Beware of phishing attempts.' },
+      { type: 'Alert', title: 'General Alert', message: 'Important information for you.' },
     ];
 
     const notifications = [];

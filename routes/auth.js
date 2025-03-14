@@ -2,7 +2,7 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User'); // Assuming you will create a User model file
-const { sendResetEmail } = require('../utils/email');
+const { sendResetEmail, sendVerificationEmail } = require('../utils/email');
 
 const router = express.Router();
 
@@ -40,7 +40,7 @@ router.post('/signup', async (req, res) => {
     await user.save();
 
     // Send verification email
-    await sendResetEmail(email, otp);
+    await sendVerificationEmail(email, otp);
 
     // Reset login attempts on successful login
     user.loginAttempts = 0;

@@ -4,13 +4,21 @@ const Notification = require('../models/Notifications');
 const User = require('../models/User');
 const { authenticateToken } = require('../middleware/auth');
 
-// Get all notifications for a user
-router.get('/', async (req, res) => {
+// Get paginated notifications for a user
+router.get('/', authenticateToken, async (req, res) => {
   try {
-    const notifications = await Notification.find()
-      .sort({ timestamp: -1 });
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const skip = (page - 1) * limit;
+
+    const notifications = await Notification.find({ userId: req.user.id })
+      .sort({ timestamp: -1 })
+      .skip(skip)
+      .limit(limit);
+      
     res.json(notifications);
   } catch (error) {
+    console.error('Error fetching notifications:', error);
     res.status(500).json({ message: error.message });
   }
 });
@@ -18,8 +26,8 @@ router.get('/', async (req, res) => {
 // Mark notification as read
 router.patch('/:id/read', authenticateToken, async (req, res) => {
   try {
-    const notification = await Notification.findByIdAndUpdate(
-      req.params.id,
+    const notification = await Notification.findOneAndUpdate(
+      { _id: req.params.id, userId: req.user._id },
       { isRead: true },
       { new: true }
     );
@@ -32,7 +40,7 @@ router.patch('/:id/read', authenticateToken, async (req, res) => {
 // Delete notification
 router.delete('/:id', authenticateToken, async (req, res) => {
   try {
-    await Notification.findByIdAndDelete(req.params.id);
+    await Notification.findOneAndDelete({ _id: req.params.id, userId: req.user._id });
     res.json({ message: 'Notification deleted' });
   } catch (error) {
     res.status(500).json({ message: error.message });

@@ -119,11 +119,11 @@ router.get('/feed', async (req, res) => {
       }
     }
     
-    // Filter by time range
+    // Filter by time range - from current time to previous selected time
     if (timeRange) {
       const { min, max } = JSON.parse(timeRange);
       const currentTime = new Date();
-      const minTime = new Date(currentTime - (max * 60 * 60 * 1000));
+      const minTime = new Date(currentTime.getTime() - (max * 60 * 60 * 1000));
       query.createdAt = { 
         $gte: minTime,
         $lte: currentTime
@@ -151,12 +151,13 @@ router.get('/feed', async (req, res) => {
         }
       };
 
-      // Apply distance filter if provided
+      // Apply distance filter if provided - radius-based filtering
       if (distance) {
-        const { max } = JSON.parse(distance);
+        const { min, max } = JSON.parse(distance);
+        geoNearPipeline.$geoNear.minDistance = min * 1000; // Convert km to meters
         geoNearPipeline.$geoNear.maxDistance = max * 1000; // Convert km to meters
       } else if (sortBy === 'Nearby Alerts') {
-        // For nearby alerts, limit to 1km
+        // For nearby alerts, use a default radius of 1km
         geoNearPipeline.$geoNear.maxDistance = 1000; // 1km in meters
       }
 
