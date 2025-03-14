@@ -48,9 +48,18 @@ router.patch('/:id/read', authenticateToken, async (req, res) => {
 // Delete notification
 router.delete('/:id', authenticateToken, async (req, res) => {
   try {
-    await Notification.findOneAndDelete({ _id: req.params.id, userId: req.user._id });
-    res.json({ message: 'Notification deleted' });
+    const result = await Notification.findOneAndDelete({ 
+      _id: req.params.id, 
+      userId: req.user.id 
+    });
+    
+    if (!result) {
+      return res.status(404).json({ message: 'Notification not found or not authorized to delete' });
+    }
+    
+    res.json({ message: 'Notification deleted successfully' });
   } catch (error) {
+    console.error('Error deleting notification:', error);
     res.status(500).json({ message: error.message });
   }
 });
