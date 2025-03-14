@@ -41,9 +41,12 @@ const userSchema = new mongoose.Schema({
     otpAttempts: {
         type: Number,
         default: 0,
-        max: 3  // Add max value to match MAX_OTP_ATTEMPTS
+        max: 3
     },
     lastOtpRequest: {
+        type: Date
+    },
+    cooldownExpiry: {
         type: Date
     },
     otpExpiry: Date,

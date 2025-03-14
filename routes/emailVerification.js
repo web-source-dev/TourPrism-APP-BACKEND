@@ -5,7 +5,7 @@ const router = express.Router();
 
 // Verify OTP
 const MAX_OTP_ATTEMPTS = 3;
-const OTP_COOLDOWN_PERIOD = 15 * 60 * 1000; // 15 minutes
+const COOLDOWN_PERIOD = 15 * 60 * 1000; // 15 minutes in milliseconds
 
 router.post('/verify-otp', async (req, res) => {
   try {
@@ -48,14 +48,37 @@ router.post('/verify-otp', async (req, res) => {
       });
     }
 
+    // Check cooldown period
+    if (user.cooldownExpiry && Date.now() < user.cooldownExpiry.getTime()) {
+      const remainingTime = user.cooldownExpiry.getTime() - Date.now();
+      return res.status(429).json({
+        message: 'Too many attempts. Please try again later',
+        cooldownRemaining: Math.ceil(remainingTime / 1000),
+        remainingAttempts: 0
+      });
+    }
+
+    // Reset attempts if cooldown has expired
+    if (user.cooldownExpiry && Date.now() >= user.cooldownExpiry.getTime()) {
+      user.otpAttempts = 0;
+      user.cooldownExpiry = null;
+    }
+
     if (user.otp !== otp) {
       user.otpAttempts += 1;
+      
+      // Set cooldown if max attempts reached
+      if (user.otpAttempts >= MAX_OTP_ATTEMPTS) {
+        user.cooldownExpiry = new Date(Date.now() + COOLDOWN_PERIOD);
+      }
+      
       await user.save();
       
-      const remainingAttempts = MAX_OTP_ATTEMPTS - user.otpAttempts;
       return res.status(400).json({
-        message: `Invalid OTP. ${remainingAttempts} attempts remaining`,
-        remainingAttempts: remainingAttempts
+        message: `Invalid OTP. ${MAX_OTP_ATTEMPTS - user.otpAttempts} attempts remaining`,
+        remainingAttempts: MAX_OTP_ATTEMPTS - user.otpAttempts,
+        cooldownRemaining: user.cooldownExpiry ? 
+          Math.ceil((user.cooldownExpiry.getTime() - Date.now()) / 1000) : null
       });
     }
 
