@@ -120,7 +120,7 @@ router.post('/login', async (req, res) => {
         algorithm: 'HS256'
       }
     );
-    res.json({ token, userId: user._id });
+    res.json({ token, userId: user._id ,emailVerified: user.emailVerified });
   } catch (error) {
     res.status(500).json({ message: 'Error logging in' });
   }
