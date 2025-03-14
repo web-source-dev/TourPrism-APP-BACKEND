@@ -4,6 +4,9 @@ const { sendVerificationEmail } = require('../utils/email');
 const router = express.Router();
 
 // Verify OTP
+const MAX_OTP_ATTEMPTS = 3;
+const OTP_COOLDOWN_PERIOD = 15 * 60 * 1000; // 15 minutes
+
 router.post('/verify-otp', async (req, res) => {
   try {
     const { email, otp } = req.body;
@@ -25,8 +28,27 @@ router.post('/verify-otp', async (req, res) => {
       return res.status(400).json({ message: 'OTP has expired. Please request a new one' });
     }
 
+    // Check OTP attempts
+    if (user.otpAttempts >= MAX_OTP_ATTEMPTS) {
+      const cooldownRemaining = OTP_COOLDOWN_PERIOD - (Date.now() - user.lastOtpRequest);
+      if (cooldownRemaining > 0) {
+        return res.status(429).json({
+          message: 'Too many attempts. Please try again later',
+          cooldownRemaining: Math.ceil(cooldownRemaining / 1000)
+        });
+      } else {
+        // Reset attempts after cooldown period
+        user.otpAttempts = 0;
+      }
+    }
+
     if (user.otp !== otp) {
-      return res.status(400).json({ message: 'Invalid OTP' });
+      user.otpAttempts += 1;
+      await user.save();
+      return res.status(400).json({
+        message: 'Invalid OTP',
+        remainingAttempts: MAX_OTP_ATTEMPTS - user.otpAttempts
+      });
     }
 
     user.emailVerified = true;
@@ -55,16 +77,25 @@ router.post('/resend-otp', async (req, res) => {
       return res.status(400).json({ message: 'Email already verified' });
     }
 
-    // Check if previous OTP hasn't expired yet (prevent spam)
-    if (user.otpExpiry && Date.now() < user.otpExpiry - 3540000) { // 59 minutes
-      return res.status(400).json({ 
+    // Rate limiting for OTP requests
+    const lastRequest = user.lastOtpRequest ? new Date(user.lastOtpRequest) : new Date(0);
+    const timeSinceLastRequest = Date.now() - lastRequest.getTime();
+    
+    if (timeSinceLastRequest < 60000) { // 1 minute cooldown
+      return res.status(429).json({
         message: 'Please wait before requesting a new OTP',
-        remainingTime: Math.ceil((user.otpExpiry - Date.now() - 3540000) / 1000)
+        remainingTime: Math.ceil((60000 - timeSinceLastRequest) / 1000)
       });
     }
 
-    // Generate new OTP
-    const otp = Math.floor(1000 + Math.random() * 9000).toString();
+    // Reset attempts if cooldown period has passed
+    if (timeSinceLastRequest >= OTP_COOLDOWN_PERIOD) {
+      user.otpAttempts = 0;
+    }
+
+    // Generate secure OTP
+    const otp = Math.floor(100000 + Math.random() * 900000).toString(); // 6-digit OTP
+    user.lastOtpRequest = new Date();
     user.otp = otp;
     user.otpExpiry = new Date(Date.now() + 3600000); // 1 hour expiry
     await user.save();

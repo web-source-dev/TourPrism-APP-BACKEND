@@ -7,10 +7,17 @@ const { sendResetEmail } = require('../utils/email');
 const router = express.Router();
 
 // Sign Up
+const MAX_LOGIN_ATTEMPTS = 5;
+const LOGIN_COOLDOWN_PERIOD = 30 * 60 * 1000; // 30 minutes
+
 router.post('/signup', async (req, res) => {
   try {
     const { email, password } = req.body;
-    console.log(email, password);
+    
+    // Validate email and password
+    if (!email || !password) {
+      return res.status(400).json({ message: 'Email and password are required' });
+    }
     
     const existingUser = await User.findOne({ email });
     if (existingUser) {
@@ -19,8 +26,8 @@ router.post('/signup', async (req, res) => {
 
     const hashedPassword = await bcrypt.hash(password, 12);
     
-    // Generate 4-digit OTP
-    const otp = Math.floor(1000 + Math.random() * 9000).toString();
+    // Generate 6-digit OTP
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
     const otpExpiry = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes expiry
 
     const user = new User({
@@ -35,13 +42,24 @@ router.post('/signup', async (req, res) => {
     // Send verification email
     await sendResetEmail(email, otp);
 
+    // Reset login attempts on successful login
+    user.loginAttempts = 0;
+    user.lastLoginAttempt = undefined;
+    await user.save();
+
+    // Generate JWT with additional security claims
     const token = jwt.sign(
       { 
         userId: user._id,
-        email: user.email
+        email: user.email,
+        iat: Math.floor(Date.now() / 1000),
+        version: user.passwordVersion || 1 // For password change invalidation
       }, 
       process.env.JWT_SECRET,
-      { expiresIn: '24h' }
+      { 
+        expiresIn: '24h',
+        algorithm: 'HS256'
+      }
     );
     res.status(201).json({ token, userId: user._id, requireVerification: true });
   } catch (error) {
@@ -52,24 +70,55 @@ router.post('/signup', async (req, res) => {
 // Login
 router.post('/login', async (req, res) => {
   try {
+    // Validate request body
+    if (!req.body.email || !req.body.password) {
+      return res.status(400).json({ message: 'Email and password are required' });
+    }
     const { email, password } = req.body;
     const user = await User.findOne({ email });
     if (!user) {
-      return res.status(401).json({ message: 'Invalid credentials' });
+      return res.status(401).json({ message: 'Invalid email or password' });
     }
 
     const isValidPassword = await bcrypt.compare(password, user.password);
     if (!isValidPassword) {
-      return res.status(401).json({ message: 'Invalid credentials' });
+      // Implement login attempt tracking
+      user.loginAttempts = (user.loginAttempts || 0) + 1;
+      user.lastLoginAttempt = new Date();
+      
+      if (user.loginAttempts >= MAX_LOGIN_ATTEMPTS) {
+        await user.save();
+        return res.status(429).json({
+          message: 'Account locked due to too many failed attempts. Please try again later',
+          cooldownRemaining: Math.ceil((LOGIN_COOLDOWN_PERIOD - (Date.now() - user.lastLoginAttempt)) / 1000)
+        });
+      }
+      
+      await user.save();
+      return res.status(401).json({
+        message: 'Invalid email or password',
+        remainingAttempts: MAX_LOGIN_ATTEMPTS - user.loginAttempts
+      });
     }
 
+    // Reset login attempts on successful login
+    user.loginAttempts = 0;
+    user.lastLoginAttempt = undefined;
+    await user.save();
+
+    // Generate JWT with additional security claims
     const token = jwt.sign(
       { 
         userId: user._id,
-        email: user.email
+        email: user.email,
+        iat: Math.floor(Date.now() / 1000),
+        version: user.passwordVersion || 1 // For password change invalidation
       }, 
       process.env.JWT_SECRET,
-      { expiresIn: '24h' }
+      { 
+        expiresIn: '24h',
+        algorithm: 'HS256'
+      }
     );
     res.json({ token, userId: user._id });
   } catch (error) {
