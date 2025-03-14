@@ -5,7 +5,7 @@ const router = express.Router();
 
 // Verify OTP
 const MAX_OTP_ATTEMPTS = 3;
-const COOLDOWN_PERIOD = 60 * 1000; // 1 minute in milliseconds (changed from 15 minutes)
+const COOLDOWN_PERIOD = 60 * 1000; // 1 minute in milliseconds
 
 router.post('/verify-otp', async (req, res) => {
   try {
@@ -22,7 +22,7 @@ router.post('/verify-otp', async (req, res) => {
 
     // Check if user has exceeded maximum attempts
     if (user.otpAttempts >= MAX_OTP_ATTEMPTS) {
-      const cooldownRemaining = OTP_COOLDOWN_PERIOD - (Date.now() - user.lastOtpRequest);
+      const cooldownRemaining = COOLDOWN_PERIOD - (Date.now() - user.lastOtpRequest);
       if (cooldownRemaining > 0) {
         return res.status(429).json({
           message: `Too many attempts. Please try again in ${Math.ceil(cooldownRemaining / 1000)} seconds`,
@@ -128,7 +128,7 @@ router.post('/resend-otp', async (req, res) => {
     }
 
     // Reset attempts if cooldown period has passed
-    if (timeSinceLastRequest >= OTP_COOLDOWN_PERIOD) {
+    if (timeSinceLastRequest >= COOLDOWN_PERIOD) {
       user.otpAttempts = 0;
     }
 
@@ -147,6 +147,37 @@ router.post('/resend-otp', async (req, res) => {
     console.error('Error resending OTP:', error);
     res.status(500).json({ message: 'Error sending OTP' });
   }
+});
+
+// Add this new route to get OTP status
+router.get('/otp-status', async (req, res) => {
+    try {
+        const { email } = req.query;
+        const user = await User.findOne({ email });
+
+        if (!user) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+
+        // Calculate remaining OTP validity
+        const remainingValidity = user.otpExpiry 
+            ? Math.max(0, Math.floor((user.otpExpiry - Date.now()) / 1000))
+            : 0;
+
+        // Calculate remaining cooldown
+        const cooldownRemaining = user.cooldownExpiry 
+            ? Math.max(0, Math.floor((user.cooldownExpiry - Date.now()) / 1000))
+            : 0;
+
+        res.json({
+            remainingValidity,
+            remainingAttempts: MAX_OTP_ATTEMPTS - (user.otpAttempts || 0),
+            cooldownRemaining
+        });
+    } catch (error) {
+        console.error('Error getting OTP status:', error);
+        res.status(500).json({ message: 'Error getting OTP status' });
+    }
 });
 
 module.exports = router;
