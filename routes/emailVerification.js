@@ -5,7 +5,7 @@ const router = express.Router();
 
 // Verify OTP
 const MAX_OTP_ATTEMPTS = 3;
-const COOLDOWN_PERIOD = 15 * 60 * 1000; // 15 minutes in milliseconds
+const COOLDOWN_PERIOD = 60 * 1000; // 1 minute in milliseconds (changed from 15 minutes)
 
 router.post('/verify-otp', async (req, res) => {
   try {
