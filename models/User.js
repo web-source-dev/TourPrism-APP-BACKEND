@@ -18,7 +18,14 @@ const userSchema = new mongoose.Schema({
         enum: ['local', 'google', 'microsoft'],
         default: 'local'
     },
-    otp: String,
+    emailVerified: {
+        type: Boolean,
+        default: false
+    },
+    otp: {
+        type: String,
+        length: 4
+    },
     otpExpiry: Date,
 }, {
     timestamps: true

@@ -32,4 +32,25 @@ const sendResetEmail = async (to, otp) => {
   }
 };
 
-module.exports = { sendResetEmail };
+const sendVerificationEmail = async (to, otp) => {
+  const mailOptions = {
+    from: process.env.EMAIL_USER,
+    to: to,
+    subject: 'Email Verification OTP',
+    html: `
+      <h1>Email Verification OTP</h1>
+      <p>Your OTP for email verification is: <strong>${otp}</strong></p>
+      <p>This OTP will expire in 1 hour.</p>
+      <p>If you didn't request this, please ignore this email.</p>
+    `
+  };
+
+  try {
+    await transporter.sendMail(mailOptions);
+  } catch (error) {
+    console.error('Error sending email:', error);
+    throw new Error('Error sending verification email');
+  }
+};
+
+module.exports = { sendResetEmail, sendVerificationEmail };

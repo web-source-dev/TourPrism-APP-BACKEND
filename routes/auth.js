@@ -18,8 +18,22 @@ router.post('/signup', async (req, res) => {
     }
 
     const hashedPassword = await bcrypt.hash(password, 12);
-    const user = new User({ email, password: hashedPassword });
+    
+    // Generate 4-digit OTP
+    const otp = Math.floor(1000 + Math.random() * 9000).toString();
+    const otpExpiry = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes expiry
+
+    const user = new User({
+      email,
+      password: hashedPassword,
+      otp,
+      otpExpiry,
+      emailVerified: false
+    });
     await user.save();
+
+    // Send verification email
+    await sendResetEmail(email, otp);
 
     const token = jwt.sign(
       { 
@@ -29,7 +43,7 @@ router.post('/signup', async (req, res) => {
       process.env.JWT_SECRET,
       { expiresIn: '24h' }
     );
-    res.status(201).json({ token, userId: user._id });
+    res.status(201).json({ token, userId: user._id, requireVerification: true });
   } catch (error) {
     res.status(500).json({ message: 'Error creating user' });
   }
@@ -137,4 +151,4 @@ router.post('/reset-password', async (req, res) => {
   }
 });
 
-module.exports = router;  
+module.exports = router;
